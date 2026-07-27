@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "videotool"
+version = "1.0.0"
+description = "A CLI tool to convert video files to image sequences"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "videotool contributors"}
+]
+keywords = ["video", "image", "sequence", "extract", "frames"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Video :: Conversion",
+]
+dependencies = [
+    "opencv-python>=4.5",
+]
+
+[project.scripts]
+videotool = "videotool.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/contributors/videotool"
+
+[tool.setuptools.packages.find]
+where = ["src"]

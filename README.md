@@ -51,7 +51,7 @@ videotool -<opt> <value> [-o <output_dir>] [--format <fmt>] <input_video>
 |--------|-------------|
 | `-f N` | Extract one frame every N frames |
 | `-t N` | Extract exactly N evenly-spaced frames |
-| `-o DIR` | Output directory (default: `<video_name>_frames/`) |
+| `-o DIR` | Output directory (default: `<video_name>_frames/` in the same folder as the video) |
 | `--format` | Output image format: `jpg` (default) or `png` |
 
 ### 交互模式（v1.1+）

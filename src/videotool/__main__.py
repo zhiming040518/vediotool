@@ -242,11 +242,11 @@ def main():
             print(f"Error: not a file: {args.input}", file=sys.stderr, flush=True)
             sys.exit(1)
 
-        # Determine output directory
+        # Determine output directory (default: next to the video file)
         if args.output:
             output_dir = args.output
         else:
-            output_dir = f"{video_path.stem}_frames"
+            output_dir = str(video_path.parent / f"{video_path.stem}_frames")
 
     # Open video and get frame count
     cap = cv2.VideoCapture(str(video_path))

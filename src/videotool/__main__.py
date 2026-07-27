@@ -1,17 +1,18 @@
 """videotool - Convert video files to image sequences.
 
 Usage:
-    videotool -f <interval> [-o <output_dir>] [--format <fmt>] [<input_video>]
-    videotool -t <count> [-o <output_dir>] [--format <fmt>] [<input_video>]
+    videotool -f <interval> [-o <output_dir>] [-n <name>] [--format <fmt>] [<input_video>]
+    videotool -t <count> [-o <output_dir>] [-n <name>] [--format <fmt>] [<input_video>]
 
     If <input_video> is omitted, prompts interactively for the video path
     and output directory.
 
 Examples:
-    videotool -f 10 video.mp4           # extract every 10th frame
-    videotool -t 100 video.mp4          # extract 100 evenly-spaced frames
-    videotool -f 30 -o ./frames video.mp4
-    videotool -f 10                     # interactive mode
+    videotool -f 10 video.mp4                     # extract every 10th frame
+    videotool -t 100 video.mp4                    # extract 100 evenly-spaced frames
+    videotool -f 30 -o ./frames video.mp4          # custom output directory
+    videotool -f 10 -n pic video.mp4               # output: pic_000001.jpg
+    videotool -f 10                                # interactive mode
 """
 
 import argparse
@@ -94,7 +95,7 @@ def compute_frame_indices_by_count(total_frames, count):
     return indices
 
 
-def extract_frames(video_path, frame_indices, output_dir, img_format="jpg"):
+def extract_frames(video_path, frame_indices, output_dir, img_format="jpg", img_name="frame"):
     """Extract specified frame indices from video and save as images."""
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -122,7 +123,7 @@ def extract_frames(video_path, frame_indices, output_dir, img_format="jpg"):
     os.makedirs(output_dir, exist_ok=True)
 
     digit_count = max(6, len(str(len(frame_indices))) + 1)
-    name_template = f"frame_{{:0{digit_count}d}}.{img_format}"
+    name_template = f"{img_name}_{{:0{digit_count}d}}.{img_format}"
 
     saved_count = 0
     for i, frame_idx in enumerate(frame_indices):
@@ -219,6 +220,13 @@ def main():
         help="Output image format (default: jpg).",
     )
     parser.add_argument(
+        "-n", "--name",
+        type=str,
+        default="frame",
+        metavar="NAME",
+        help="Output image filename prefix (default: frame). e.g. --name pic → pic_000001.jpg",
+    )
+    parser.add_argument(
         "input",
         type=str,
         nargs="?",
@@ -297,7 +305,7 @@ def main():
         print("Error: no frames to extract.", file=sys.stderr, flush=True)
         sys.exit(1)
 
-    extract_frames(video_path, frame_indices, output_dir, args.format)
+    extract_frames(video_path, frame_indices, output_dir, args.format, args.name)
 
 
 if __name__ == "__main__":

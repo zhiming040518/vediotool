@@ -154,39 +154,66 @@ def extract_frames(video_path, frame_indices, output_dir, img_format="jpg", img_
 
 
 def interactive_mode():
-    """Prompt the user for video path and output directory interactively."""
+    """Prompt the user for video path(s) and output directory interactively.
+
+    Returns (video_paths, output_dir, img_name, multi_video).
+    """
     print("=" * 50, flush=True)
     print("  videotool - Interactive Mode", flush=True)
     print("=" * 50, flush=True)
     print(flush=True)
 
-    # Prompt for video path
+    # Collect video paths (support multiple)
+    video_paths = []
     while True:
-        raw = input("请输入视频源路径: ").strip().strip('"').strip("'")
+        if not video_paths:
+            prompt = "请输入视频源路径 (可输入多个，空行结束): "
+        else:
+            prompt = f"  继续添加第 {len(video_paths) + 1} 个视频 (直接回车结束): "
+
+        raw = input(prompt).strip().strip('"').strip("'")
         if not raw:
-            print("  路径不能为空，请重新输入。", flush=True)
-            continue
-        video_path = Path(raw)
-        if not video_path.exists():
+            if not video_paths:
+                print("  路径不能为空，请重新输入。", flush=True)
+                continue
+            else:
+                break
+
+        vp = Path(raw)
+        if not vp.exists():
             print(f"  文件不存在: {raw}", flush=True)
             continue
-        if not video_path.is_file():
+        if not vp.is_file():
             print(f"  不是有效的文件: {raw}", flush=True)
             continue
-        break
+        video_paths.append(vp)
+        print(f"    [OK] 已添加: {vp}", flush=True)
 
-    print(f"  [OK] 视频: {video_path}", flush=True)
     print(flush=True)
+    multi_video = len(video_paths) > 1
+
+    if multi_video:
+        print(f"  共 {len(video_paths)} 个视频文件。", flush=True)
+        print(flush=True)
 
     # Prompt for output directory
-    default_output = str(video_path.parent / f"{video_path.stem}_frames")
-    raw = input(f"请输入输出路径 (直接回车则默认):\n  → {default_output}\n  ").strip().strip('"').strip("'")
-
-    if raw:
-        output_dir = raw
+    if multi_video:
+        # Multi-video: output is required, no default
+        while True:
+            raw = input(f"请输入输出路径 (多视频模式下必填):\n  → ").strip().strip('"').strip("'")
+            if not raw:
+                print("  多视频模式下输出路径不能为空，请重新输入。", flush=True)
+                continue
+            output_dir = raw
+            break
     else:
-        output_dir = default_output
-        print(f"  使用默认路径: {output_dir}", flush=True)
+        default_output = str(video_paths[0].parent / f"{video_paths[0].stem}_frames")
+        raw = input(f"请输入输出路径 (直接回车则默认):\n  → {default_output}\n  ").strip().strip('"').strip("'")
+        if raw:
+            output_dir = raw
+        else:
+            output_dir = default_output
+            print(f"  使用默认路径: {output_dir}", flush=True)
 
     print(flush=True)
 
@@ -202,7 +229,7 @@ def interactive_mode():
 
     print(flush=True)
 
-    return video_path, output_dir, img_name
+    return video_paths, output_dir, img_name, multi_video
 
 
 def process_video(video_path, args, output_dir, img_name, start_index=0):
@@ -316,10 +343,8 @@ def main():
 
     # --- Determine mode: interactive, single-video, or multi-video ---
     if not args.input:
-        # Interactive mode: no video paths given
-        video_path, output_dir, img_name = interactive_mode()
-        video_paths = [video_path]
-        multi_video = False
+        # Interactive mode: prompt for video path(s)
+        video_paths, output_dir, img_name, multi_video = interactive_mode()
     elif len(args.input) == 1:
         # Single video mode
         video_path = Path(args.input[0])

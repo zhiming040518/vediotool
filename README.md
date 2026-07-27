@@ -4,20 +4,24 @@ A CLI tool to convert video files to image sequences.
 
 ## Installation
 
+### From GitHub (recommended)
+
 ```bash
+pip install git+https://github.com/zhiming040518/vediotool.git
+```
+
+### From local source
+
+```bash
+git clone git@github.com:zhiming040518/vediotool.git
+cd vediotool
 pip install .
 ```
 
-Or from the project directory for editable development:
+### Editable development install
 
 ```bash
 pip install -e .
-```
-
-Once published to PyPI:
-
-```bash
-pip install videotool
 ```
 
 ## Usage

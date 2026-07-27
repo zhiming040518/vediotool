@@ -44,16 +44,25 @@ python setup.py install
 ### 命令行模式
 
 ```bash
-videotool -<opt> <value> [-o <output_dir>] [-n <name>] [--format <fmt>] <input_video>
+videotool -<opt> <value> [-o <output_dir>] [-n <name>] [--format <fmt>] [<video> ...]
 ```
 
 | Option | Description |
 |--------|-------------|
 | `-f N` | Extract one frame every N frames |
 | `-t N` | Extract exactly N evenly-spaced frames |
-| `-o DIR` | Output directory (default: `<video_name>_frames/` in the same folder as the video) |
+| `-o DIR` | Output directory (default: `<video_name>_frames/` in the same folder as the video). **Required for multi-video.** |
 | `-n NAME` | Output image filename prefix (default: `frame`). e.g. `-n pic` → `pic_000001.jpg` |
 | `--format` | Output image format: `jpg` (default) or `png` |
+
+### 多视频模式（v1.2+）
+
+可以一次指定多个视频文件，所有帧按顺序编号输出到**同一个目录**（此时 `-o` 必填）：
+
+```bash
+# 三个视频的帧全部放入 ./all_frames/，全局连续编号
+videotool -f 10 -o ./all_frames a.mp4 b.mp4 c.mp4
+```
 
 ### 交互模式（v1.1+）
 
@@ -92,11 +101,14 @@ videotool -f 10 video.mp4
 # 命令行模式：提取 100 帧
 videotool -t 100 video.mp4
 
-# 命令行模式：自定义输出目录和格式
+# 自定义输出目录和格式
 videotool -f 30 -o ./my_frames --format png video.mp4
 
 # 自定义输出文件名前缀 → pic_000001.jpg, pic_000002.jpg, ...
 videotool -f 10 -n pic video.mp4
+
+# 多视频模式：三个视频的帧集中到同一目录，全局连续编号
+videotool -f 10 -o ./all_frames a.mp4 b.mp4 c.mp4
 
 # 交互模式：只给参数，交互输入路径
 videotool -f 10

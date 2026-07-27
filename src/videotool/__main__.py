@@ -1,18 +1,20 @@
 """videotool - Convert video files to image sequences.
 
 Usage:
-    videotool -f <interval> [-o <output_dir>] [-n <name>] [--format <fmt>] [<input_video>]
-    videotool -t <count> [-o <output_dir>] [-n <name>] [--format <fmt>] [<input_video>]
+    videotool -f <interval> [-o <output_dir>] [-n <name>] [--format <fmt>] [<video> ...]
+    videotool -t <count> [-o <output_dir>] [-n <name>] [--format <fmt>] [<video> ...]
 
-    If <input_video> is omitted, prompts interactively for the video path
-    and output directory.
+    If no video is given, prompts interactively. Multiple videos can be
+    specified (requires -o) — all frames go into one output directory
+    with sequential numbering across videos.
 
 Examples:
-    videotool -f 10 video.mp4                     # extract every 10th frame
-    videotool -t 100 video.mp4                    # extract 100 evenly-spaced frames
+    videotool -f 10 video.mp4                     # single video
+    videotool -t 100 video.mp4                    # evenly-spaced frames
     videotool -f 30 -o ./frames video.mp4          # custom output directory
     videotool -f 10 -n pic video.mp4               # output: pic_000001.jpg
     videotool -f 10                                # interactive mode
+    videotool -f 10 -o ./all a.mp4 b.mp4 c.mp4     # multi-video → one folder
 """
 
 import argparse
@@ -95,8 +97,11 @@ def compute_frame_indices_by_count(total_frames, count):
     return indices
 
 
-def extract_frames(video_path, frame_indices, output_dir, img_format="jpg", img_name="frame"):
-    """Extract specified frame indices from video and save as images."""
+def extract_frames(video_path, frame_indices, output_dir, img_format="jpg", img_name="frame", start_index=0):
+    """Extract specified frame indices from video and save as images.
+
+    Returns the number of frames successfully saved.
+    """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         cap.release()
@@ -122,7 +127,9 @@ def extract_frames(video_path, frame_indices, output_dir, img_format="jpg", img_
 
     os.makedirs(output_dir, exist_ok=True)
 
-    digit_count = max(6, len(str(len(frame_indices))) + 1)
+    # Use a generous digit count to handle multi-video accumulation
+    total_to_extract = len(frame_indices)
+    digit_count = max(6, len(str(start_index + total_to_extract)) + 1)
     name_template = f"{img_name}_{{:0{digit_count}d}}.{img_format}"
 
     saved_count = 0
@@ -133,16 +140,17 @@ def extract_frames(video_path, frame_indices, output_dir, img_format="jpg", img_
             print(f"  Warning: failed to read frame {frame_idx}, skipping.", flush=True)
             continue
 
-        out_path = os.path.join(output_dir, name_template.format(i + 1))
+        out_path = os.path.join(output_dir, name_template.format(start_index + i + 1))
         success = _imwrite_safe(out_path, frame)
         if success:
             saved_count += 1
-            print(f"  [{i + 1}/{len(frame_indices)}] {out_path}", flush=True)
+            print(f"  [{i + 1}/{total_to_extract}] {out_path}", flush=True)
         else:
             print(f"  Error: failed to write {out_path}", file=sys.stderr, flush=True)
 
     cap.release()
-    print(f"\nDone! {saved_count}/{len(frame_indices)} frames saved to {output_dir}", flush=True)
+    print(f"  {saved_count}/{total_to_extract} frames saved from this video.", flush=True)
+    return saved_count
 
 
 def interactive_mode():
@@ -197,6 +205,63 @@ def interactive_mode():
     return video_path, output_dir, img_name
 
 
+def process_video(video_path, args, output_dir, img_name, start_index=0):
+    """Process a single video: open, compute frame indices, extract.
+
+    Returns (saved_count, expected_count).
+    """
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        cap.release()
+        print(
+            f"Error: cannot open video file: {video_path}\n"
+            f"  The path may contain characters that OpenCV cannot handle.\n"
+            f"  Try moving the video to a path with only ASCII characters.",
+            file=sys.stderr,
+            flush=True,
+        )
+        sys.exit(1)
+
+    total_frames, _ = get_video_info(cap)
+    cap.release()
+
+    # Handle the case where OpenCV cannot determine frame count
+    if total_frames <= 0:
+        print(
+            f"Warning: Cannot determine frame count from video metadata "
+            f"(got {total_frames}). Counting frames by scanning the video...",
+            flush=True,
+        )
+        total_frames = count_frames_by_reading(video_path)
+        if total_frames <= 0:
+            print(
+                f"Error: Unable to read any frames from the video. "
+                f"The video codec may not be supported by OpenCV.",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(1)
+        print(f"  Found {total_frames} frames by scanning.", flush=True)
+        print(flush=True)
+
+    # Compute frame indices
+    if args.frame_interval is not None:
+        frame_indices = compute_frame_indices_by_interval(
+            total_frames, args.frame_interval
+        )
+    else:
+        frame_indices = compute_frame_indices_by_count(
+            total_frames, args.total_frames
+        )
+
+    if not frame_indices:
+        print(f"Error: no frames to extract from {video_path}.", file=sys.stderr, flush=True)
+        return 0, 0
+
+    saved = extract_frames(video_path, frame_indices, output_dir, args.format, img_name, start_index)
+    return saved, len(frame_indices)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="videotool",
@@ -241,86 +306,88 @@ def main():
     parser.add_argument(
         "input",
         type=str,
-        nargs="?",
+        nargs="*",
         default=None,
-        help="Path to the input video file. Omit for interactive mode.",
+        help="Path to the input video file(s). Omit for interactive mode. "
+             "Multiple videos can be specified (requires -o).",
     )
 
     args = parser.parse_args()
 
-    # --- Determine mode: interactive or non-interactive ---
-    if args.input is None:
-        # Interactive mode: prompt for video path and output directory
+    # --- Determine mode: interactive, single-video, or multi-video ---
+    if not args.input:
+        # Interactive mode: no video paths given
         video_path, output_dir, img_name = interactive_mode()
-    else:
-        # Non-interactive mode: use command-line arguments
-        video_path = Path(args.input)
+        video_paths = [video_path]
+        multi_video = False
+    elif len(args.input) == 1:
+        # Single video mode
+        video_path = Path(args.input[0])
         if not video_path.exists():
-            print(f"Error: file not found: {args.input}", file=sys.stderr, flush=True)
+            print(f"Error: file not found: {args.input[0]}", file=sys.stderr, flush=True)
             sys.exit(1)
         if not video_path.is_file():
-            print(f"Error: not a file: {args.input}", file=sys.stderr, flush=True)
+            print(f"Error: not a file: {args.input[0]}", file=sys.stderr, flush=True)
             sys.exit(1)
+        video_paths = [video_path]
 
-        # Determine output directory (default: next to the video file)
         if args.output:
             output_dir = args.output
         else:
             output_dir = str(video_path.parent / f"{video_path.stem}_frames")
 
-        # Use the --name flag (or default)
         img_name = args.name
-
-    # Open video and get frame count
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        cap.release()
-        print(
-            f"Error: cannot open video file: {video_path}\n"
-            f"  The path may contain characters that OpenCV cannot handle.\n"
-            f"  Try moving the video to a path with only ASCII characters.",
-            file=sys.stderr,
-            flush=True,
-        )
-        sys.exit(1)
-
-    total_frames, fps = get_video_info(cap)
-    cap.release()
-
-    # Fix: handle the case where OpenCV cannot determine frame count
-    if total_frames <= 0:
-        print(
-            f"Warning: Cannot determine frame count from video metadata "
-            f"(got {total_frames}). Counting frames by scanning the video...",
-            flush=True,
-        )
-        total_frames = count_frames_by_reading(video_path)
-        if total_frames <= 0:
+        multi_video = False
+    else:
+        # Multi-video mode: require -o
+        if args.output is None:
             print(
-                f"Error: Unable to read any frames from the video. "
-                f"The video codec may not be supported by OpenCV.",
+                "Error: -o/--output is required when processing multiple videos.",
                 file=sys.stderr,
                 flush=True,
             )
             sys.exit(1)
-        print(f"  Found {total_frames} frames by scanning.", flush=True)
-        print(flush=True)
 
-    # Compute frame indices
-    if args.frame_interval is not None:
-        frame_indices = compute_frame_indices_by_interval(
-            total_frames, args.frame_interval
-        )
+        video_paths = []
+        for p in args.input:
+            vp = Path(p)
+            if not vp.exists():
+                print(f"Error: file not found: {p}", file=sys.stderr, flush=True)
+                sys.exit(1)
+            if not vp.is_file():
+                print(f"Error: not a file: {p}", file=sys.stderr, flush=True)
+                sys.exit(1)
+            video_paths.append(vp)
+
+        output_dir = args.output
+        img_name = args.name
+        multi_video = True
+
+    # --- Process all videos ---
+    total_saved = 0
+    global_index = 0
+
+    print("=" * 50, flush=True)
+    if multi_video:
+        print(f"  Processing {len(video_paths)} videos → {output_dir}", flush=True)
+    print("=" * 50, flush=True)
+    print(flush=True)
+
+    for idx, vp in enumerate(video_paths):
+        if multi_video:
+            print(f"--- Video {idx + 1}/{len(video_paths)} ---", flush=True)
+
+        saved, expected = process_video(vp, args, output_dir, img_name, global_index)
+        total_saved += saved
+        global_index += expected  # Advance by expected count to avoid filename collisions
+
+    # --- Summary ---
+    if multi_video:
+        print("=" * 50, flush=True)
+        print(f"  All done! {total_saved} frames total → {output_dir}", flush=True)
+        print("=" * 50, flush=True)
     else:
-        frame_indices = compute_frame_indices_by_count(
-            total_frames, args.total_frames
-        )
-
-    if not frame_indices:
-        print("Error: no frames to extract.", file=sys.stderr, flush=True)
-        sys.exit(1)
-
-    extract_frames(video_path, frame_indices, output_dir, args.format, img_name)
+        print(f"Done! {total_saved} frames saved to {output_dir}", flush=True)
 
 
 if __name__ == "__main__":

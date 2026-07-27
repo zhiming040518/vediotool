@@ -182,7 +182,19 @@ def interactive_mode():
 
     print(flush=True)
 
-    return video_path, output_dir
+    # Prompt for output filename prefix
+    default_name = "frame"
+    raw = input(f"请输入输出文件名前缀 (直接回车则默认 \"{default_name}\"):\n  → ").strip().strip('"').strip("'")
+
+    if raw:
+        img_name = raw
+    else:
+        img_name = default_name
+        print(f"  使用默认前缀: {img_name}", flush=True)
+
+    print(flush=True)
+
+    return video_path, output_dir, img_name
 
 
 def main():
@@ -239,7 +251,7 @@ def main():
     # --- Determine mode: interactive or non-interactive ---
     if args.input is None:
         # Interactive mode: prompt for video path and output directory
-        video_path, output_dir = interactive_mode()
+        video_path, output_dir, img_name = interactive_mode()
     else:
         # Non-interactive mode: use command-line arguments
         video_path = Path(args.input)
@@ -255,6 +267,9 @@ def main():
             output_dir = args.output
         else:
             output_dir = str(video_path.parent / f"{video_path.stem}_frames")
+
+        # Use the --name flag (or default)
+        img_name = args.name
 
     # Open video and get frame count
     cap = cv2.VideoCapture(str(video_path))
@@ -305,7 +320,7 @@ def main():
         print("Error: no frames to extract.", file=sys.stderr, flush=True)
         sys.exit(1)
 
-    extract_frames(video_path, frame_indices, output_dir, args.format, args.name)
+    extract_frames(video_path, frame_indices, output_dir, args.format, img_name)
 
 
 if __name__ == "__main__":

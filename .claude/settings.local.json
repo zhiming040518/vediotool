@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git add *)",
-      "Bash(git commit -m 'Improve compatibility: lower build reqs, README multi-method install, improved setup.py *)",
-      "Bash(git push *)"
-    ]
-  }
-}

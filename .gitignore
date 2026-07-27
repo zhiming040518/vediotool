@@ -22,3 +22,4 @@ boundary_test/
 *.avi
 *.mov
 *.txt
+.claude/
